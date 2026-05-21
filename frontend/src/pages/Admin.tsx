@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '../api'
-import type { AdminSettings, FilterCondition } from '../api'
+import type { AdminSettings } from '../api'
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -27,7 +27,6 @@ export default function Admin() {
 
   const [draft, setDraft] = useState<AdminSettings | null>(null)
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
-  const [newPresetName, setNewPresetName] = useState('')
   const [newAliasKey, setNewAliasKey] = useState('')
   const [newAliasVal, setNewAliasVal] = useState('')
 
@@ -90,13 +89,6 @@ export default function Admin() {
       delete aliases[key]
       return { ...d, property_aliases: aliases }
     })
-  }
-
-  function addPreset() {
-    if (!newPresetName) return
-    const preset = { name: newPresetName, filters: [] as FilterCondition[] }
-    setDraft(d => d ? { ...d, filter_presets: [...d.filter_presets, preset] } : d)
-    setNewPresetName('')
   }
 
   function removePreset(name: string) {
@@ -252,35 +244,31 @@ export default function Admin() {
 
       {/* Filter Presets */}
       <Section title="Filter Presets">
-        <p className="text-xs text-slate-500 mb-4">Saved filter sets that appear as quick-load buttons in the Explorer.</p>
-        <div className="space-y-2 mb-4">
+        <p className="text-xs text-slate-500 mb-4">
+          Save presets from the Explorer using the <span className="font-medium text-slate-600">Save as Preset</span> button. Presets appear as quick-load buttons above the filter rows.
+        </p>
+        <div className="space-y-2">
           {draft.filter_presets.map(p => (
-            <div key={p.name} className="flex items-center justify-between bg-slate-50 rounded p-2 text-sm">
+            <div key={p.name} className="flex items-center justify-between bg-slate-50 rounded-lg px-3 py-2 text-sm">
               <div>
                 <span className="font-medium text-slate-700">{p.name}</span>
                 <span className="ml-2 text-slate-400 text-xs">{p.filters.length} filter{p.filters.length !== 1 ? 's' : ''}</span>
+                {p.filters.length > 0 && (
+                  <ul className="mt-1 space-y-0.5">
+                    {p.filters.map((f, i) => (
+                      <li key={i} className="text-xs text-slate-400">
+                        {f.property} {f.operator} {f.value != null ? String(f.value) : ''}
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
-              <button onClick={() => removePreset(p.name)} className="text-slate-400 hover:text-red-500 text-xs">Remove</button>
+              <button onClick={() => removePreset(p.name)} className="ml-4 shrink-0 text-slate-400 hover:text-red-500 text-xs transition-colors">Remove</button>
             </div>
           ))}
           {draft.filter_presets.length === 0 && (
-            <p className="text-xs text-slate-400">No presets saved. Save filters from the Explorer to add them here.</p>
+            <p className="text-xs text-slate-400">No presets saved yet. Build a filter in the Explorer and click <span className="font-medium">Save as Preset</span>.</p>
           )}
-        </div>
-        <div className="flex gap-2">
-          <input
-            type="text"
-            placeholder="Preset name…"
-            value={newPresetName}
-            onChange={e => setNewPresetName(e.target.value)}
-            className="flex-1 border border-slate-200 rounded px-2 py-1.5 text-sm text-slate-700"
-          />
-          <button
-            onClick={addPreset}
-            className="px-3 py-1.5 text-sm bg-slate-100 hover:bg-slate-200 text-slate-700 rounded transition-colors"
-          >
-            Add Empty
-          </button>
         </div>
       </Section>
     </div>

@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react'
-import { useQuery, useMutation } from '@tanstack/react-query'
+import { useState, useEffect, useRef } from 'react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '../api'
 import type { FilterCondition, FilterRequest } from '../api'
 import FilterBuilder from '../components/FilterBuilder'
@@ -17,11 +17,17 @@ function loadSavedState(): { filters: FilterCondition[]; includeChildren: boolea
 }
 
 export default function Explorer() {
+  const qc = useQueryClient()
   const saved = loadSavedState()
   const [filters, setFilters] = useState<FilterCondition[]>(saved.filters)
   const [includeChildren, setIncludeChildren] = useState(saved.includeChildren)
-  const [page, setPage] = useState(1)
+  const [, setPage] = useState(1)
   const [showProducts, setShowProducts] = useState(true)
+  const [presetName, setPresetName] = useState('')
+  const [showPresetInput, setShowPresetInput] = useState(false)
+  const [presetSaved, setPresetSaved] = useState(false)
+  const presetInputRef = useRef<HTMLInputElement>(null)
+  const autoRanRef = useRef(false)
 
   // Persist filters to localStorage whenever they change
   useEffect(() => {
@@ -29,6 +35,11 @@ export default function Explorer() {
       localStorage.setItem(STORAGE_KEY, JSON.stringify({ filters, includeChildren }))
     } catch {}
   }, [filters, includeChildren])
+
+  // Focus preset input when it appears
+  useEffect(() => {
+    if (showPresetInput) presetInputRef.current?.focus()
+  }, [showPresetInput])
 
   const { data: attributes = [], isLoading: attrsLoading } = useQuery({
     queryKey: ['attributes'],
@@ -40,8 +51,6 @@ export default function Explorer() {
     queryFn: api.getAdminSettings,
   })
 
-  const filterReq: FilterRequest = { filters, include_children: includeChildren, page, page_size: 50 }
-
   const filterMutation = useMutation({
     mutationFn: (req: FilterRequest) => api.filterProducts(req),
   })
@@ -50,16 +59,48 @@ export default function Explorer() {
     mutationFn: (req: FilterRequest) => api.getReport(req),
   })
 
+  const savePresetMutation = useMutation({
+    mutationFn: api.saveAdminSettings,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['admin-settings'] })
+      setPresetSaved(true)
+      setShowPresetInput(false)
+      setPresetName('')
+      setTimeout(() => setPresetSaved(false), 2500)
+    },
+  })
+
+  // Auto-run query on load if filters were restored from localStorage
+  useEffect(() => {
+    if (autoRanRef.current) return
+    if (attrsLoading || !adminSettings) return
+    if (filters.length === 0) return
+    autoRanRef.current = true
+    const req: FilterRequest = { filters, include_children: includeChildren, page: 1, page_size: 50 }
+    filterMutation.mutate(req)
+    reportMutation.mutate(req)
+  }, [attrsLoading, adminSettings])
+
   function runQuery() {
     setPage(1)
-    const req = { ...filterReq, page: 1 }
+    const req: FilterRequest = { filters, include_children: includeChildren, page: 1, page_size: 50 }
     filterMutation.mutate(req)
     reportMutation.mutate(req)
   }
 
   function handlePageChange(newPage: number) {
     setPage(newPage)
-    filterMutation.mutate({ ...filterReq, page: newPage })
+    filterMutation.mutate({ filters, include_children: includeChildren, page: newPage, page_size: 50 })
+  }
+
+  function savePreset() {
+    const name = presetName.trim()
+    if (!name || !adminSettings) return
+    const existing = adminSettings.filter_presets.filter(p => p.name !== name)
+    savePresetMutation.mutate({
+      ...adminSettings,
+      filter_presets: [...existing, { name, filters }],
+    })
   }
 
   const isLoading = filterMutation.isPending || reportMutation.isPending
@@ -77,6 +118,7 @@ export default function Explorer() {
             <span className="text-xs text-slate-400 animate-pulse">Loading attributes…</span>
           )}
         </div>
+
         <FilterBuilder
           filters={filters}
           attributes={attributes}
@@ -86,15 +128,58 @@ export default function Explorer() {
           onIncludeChildrenChange={v => { setIncludeChildren(v) }}
           onLoadPreset={preset => { setFilters(preset.filters) }}
         />
-        <div className="mt-4 flex items-center justify-between">
+
+        <div className="mt-4 flex flex-wrap items-center gap-3">
+          {/* Save as Preset */}
           {filters.length > 0 && (
-            <span className="text-xs text-slate-400">
-              Filters saved automatically
-              <svg className="inline w-3 h-3 ml-1 text-emerald-500" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-              </svg>
-            </span>
+            <div className="flex items-center gap-2">
+              {showPresetInput ? (
+                <>
+                  <input
+                    ref={presetInputRef}
+                    type="text"
+                    value={presetName}
+                    onChange={e => setPresetName(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') savePreset(); if (e.key === 'Escape') setShowPresetInput(false) }}
+                    placeholder="Preset name…"
+                    className="border border-slate-200 rounded-md px-2 py-1.5 text-sm w-44 focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                  />
+                  <button
+                    onClick={savePreset}
+                    disabled={!presetName.trim() || savePresetMutation.isPending}
+                    className="px-3 py-1.5 text-sm bg-indigo-600 hover:bg-indigo-700 text-white rounded-md transition-colors disabled:opacity-50"
+                  >
+                    Save
+                  </button>
+                  <button
+                    onClick={() => { setShowPresetInput(false); setPresetName('') }}
+                    className="text-slate-400 hover:text-slate-600 text-sm"
+                  >
+                    Cancel
+                  </button>
+                </>
+              ) : (
+                <button
+                  onClick={() => setShowPresetInput(true)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-slate-600 hover:text-slate-800 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-md transition-colors"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
+                  </svg>
+                  Save as Preset
+                </button>
+              )}
+              {presetSaved && (
+                <span className="text-xs text-emerald-600 flex items-center gap-1">
+                  <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                  </svg>
+                  Preset saved!
+                </span>
+              )}
+            </div>
           )}
+
           <button
             onClick={runQuery}
             disabled={isLoading || attributes.length === 0}
@@ -123,7 +208,6 @@ export default function Explorer() {
       {/* Results */}
       {hasRun && (
         <>
-          {/* Summary bar */}
           <div className="flex items-center gap-4 text-sm text-slate-600">
             {filterResult && (
               <span className="font-medium text-slate-800">
@@ -137,7 +221,6 @@ export default function Explorer() {
             )}
           </div>
 
-          {/* Property Report */}
           {reportResult && (
             <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
               <h2 className="text-base font-semibold text-slate-800 mb-4">Property Report</h2>
@@ -149,7 +232,6 @@ export default function Explorer() {
             </div>
           )}
 
-          {/* Product List */}
           {filterResult && (
             <div className="bg-white rounded-xl border border-slate-200 shadow-sm">
               <button
