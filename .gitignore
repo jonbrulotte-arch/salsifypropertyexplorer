@@ -1,0 +1,7 @@
+data_extracted/
+backend/admin_settings.json
+frontend/node_modules/
+frontend/dist/
+__pycache__/
+*.pyc
+.DS_Store
