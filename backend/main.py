@@ -49,7 +49,7 @@ app.add_middleware(
 
 
 @app.get("/api/attributes", response_model=list[AttributeInfo])
-def list_attributes():
+def list_attributes(include_hidden: bool = False):
     attr_map = get_attribute_map()
     enum_values = get_enum_values()
     aliases = _settings.property_aliases
@@ -58,7 +58,7 @@ def list_attributes():
     result = []
     for attr in get_attributes():
         attr_id = attr["salsify:id"]
-        if attr_id in hidden:
+        if not include_hidden and attr_id in hidden:
             continue
         result.append(AttributeInfo(
             id=attr_id,

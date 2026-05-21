@@ -17,11 +17,7 @@ export default function Admin() {
 
   const { data: attributes = [] } = useQuery({
     queryKey: ['attributes-all'],
-    queryFn: async () => {
-      // Need all attributes including hidden; fetch directly
-      const res = await fetch('/api/attributes')
-      return res.json()
-    },
+    queryFn: () => fetch('/api/attributes?include_hidden=true').then(r => r.json()),
   })
 
   const { data: settings, isLoading } = useQuery({
