@@ -7,9 +7,9 @@ echo "Starting Salsify Property Explorer..."
 echo ""
 
 # Start backend
-echo "[backend] Starting FastAPI on http://localhost:8000"
+echo "[backend] Starting FastAPI on http://localhost:8001"
 cd "$ROOT"
-python3 -m uvicorn backend.main:app --reload --port 8000 &
+python3 -m uvicorn backend.main:app --reload --port 8001 &
 BACKEND_PID=$!
 
 # Start frontend
@@ -20,8 +20,8 @@ FRONTEND_PID=$!
 
 echo ""
 echo "  Frontend: http://localhost:5173"
-echo "  Backend API: http://localhost:8000"
-echo "  API Docs: http://localhost:8000/docs"
+echo "  Backend API: http://localhost:8001"
+echo "  API Docs: http://localhost:8001/docs"
 echo ""
 echo "Press Ctrl+C to stop."
 
