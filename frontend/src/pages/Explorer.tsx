@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query'
 import { api } from '../api'
 import type { FilterCondition, FilterRequest } from '../api'
 import FilterBuilder from '../components/FilterBuilder'
@@ -8,7 +8,7 @@ import ProductTable, { exportProducts } from '../components/ProductTable'
 
 const STORAGE_KEY = 'salsify-explorer-filters'
 
-function loadSavedState(): { filters: FilterCondition[]; includeChildren: boolean } {
+function loadSaved(): { filters: FilterCondition[]; includeChildren: boolean } {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
     if (raw) return JSON.parse(raw)
@@ -18,7 +18,8 @@ function loadSavedState(): { filters: FilterCondition[]; includeChildren: boolea
 
 export default function Explorer() {
   const qc = useQueryClient()
-  const saved = loadSavedState()
+  const saved = loadSaved()
+
   const [filters, setFilters] = useState<FilterCondition[]>(saved.filters)
   const [includeChildren, setIncludeChildren] = useState(saved.includeChildren)
   const [, setPage] = useState(1)
@@ -27,16 +28,21 @@ export default function Explorer() {
   const [showPresetInput, setShowPresetInput] = useState(false)
   const [presetSaved, setPresetSaved] = useState(false)
   const presetInputRef = useRef<HTMLInputElement>(null)
-  const autoRanRef = useRef(false)
 
-  // Persist filters to localStorage whenever they change
+  // queryParams is the committed state that drives both queries.
+  // Initialise from saved filters so results auto-load on return navigation.
+  const [queryParams, setQueryParams] = useState<FilterRequest | null>(
+    saved.filters.length > 0
+      ? { filters: saved.filters, include_children: saved.includeChildren, page: 1, page_size: 50 }
+      : null
+  )
+
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify({ filters, includeChildren }))
     } catch {}
   }, [filters, includeChildren])
 
-  // Focus preset input when it appears
   useEffect(() => {
     if (showPresetInput) presetInputRef.current?.focus()
   }, [showPresetInput])
@@ -51,12 +57,28 @@ export default function Explorer() {
     queryFn: api.getAdminSettings,
   })
 
-  const filterMutation = useMutation({
-    mutationFn: (req: FilterRequest) => api.filterProducts(req),
+  // useQuery for filter + report: results are cached by queryParams, so
+  // navigating away and back shows the last result instantly with no effect tricks.
+  const filterQKey = ['products-filter', queryParams]
+  const reportQKey = ['products-report', queryParams ? { filters: queryParams.filters, include_children: queryParams.include_children } : null]
+
+  const { data: filterResult, isFetching: filterFetching } = useQuery({
+    queryKey: filterQKey,
+    queryFn: () => api.filterProducts(queryParams!),
+    enabled: queryParams !== null,
+    placeholderData: keepPreviousData,
   })
 
-  const reportMutation = useMutation({
-    mutationFn: (req: FilterRequest) => api.getReport(req),
+  const { data: reportResult, isFetching: reportFetching } = useQuery({
+    queryKey: reportQKey,
+    queryFn: () => api.getReport({
+      filters: queryParams!.filters,
+      include_children: queryParams!.include_children,
+      page: 1,
+      page_size: 50,
+    }),
+    enabled: queryParams !== null,
+    placeholderData: keepPreviousData,
   })
 
   const exportMutation = useMutation({
@@ -75,31 +97,20 @@ export default function Explorer() {
     },
   })
 
-  // Auto-run query on load if filters were restored from localStorage
-  useEffect(() => {
-    if (autoRanRef.current) return
-    if (attrsLoading || !adminSettings) return
-    if (filters.length === 0) return
-    autoRanRef.current = true
-    const req: FilterRequest = { filters, include_children: includeChildren, page: 1, page_size: 50 }
-    filterMutation.mutate(req)
-    reportMutation.mutate(req)
-  }, [attrsLoading, adminSettings])
-
   function runQuery() {
-    setPage(1)
     const req: FilterRequest = { filters, include_children: includeChildren, page: 1, page_size: 50 }
-    filterMutation.mutate(req)
-    reportMutation.mutate(req)
+    setPage(1)
+    setQueryParams(req)
   }
 
   function handlePageChange(newPage: number) {
     setPage(newPage)
-    filterMutation.mutate({ filters, include_children: includeChildren, page: newPage, page_size: 50 })
+    setQueryParams(q => q ? { ...q, page: newPage } : null)
   }
 
   function handleExportAll() {
-    exportMutation.mutate({ filters, include_children: includeChildren, page: 1, page_size: -1 })
+    if (!queryParams) return
+    exportMutation.mutate({ filters: queryParams.filters, include_children: queryParams.include_children, page: 1, page_size: -1 })
   }
 
   function savePreset() {
@@ -112,10 +123,8 @@ export default function Explorer() {
     })
   }
 
-  const isLoading = filterMutation.isPending || reportMutation.isPending
-  const filterResult = filterMutation.data
-  const reportResult = reportMutation.data
-  const hasRun = filterResult !== undefined || reportResult !== undefined
+  const isLoading = filterFetching || reportFetching
+  const hasRun = queryParams !== null
 
   return (
     <div className="max-w-screen-xl mx-auto px-4 py-6 space-y-6">
@@ -139,7 +148,6 @@ export default function Explorer() {
         />
 
         <div className="mt-4 flex flex-wrap items-center gap-3">
-          {/* Save as Preset */}
           {filters.length > 0 && (
             <div className="flex items-center gap-2">
               {showPresetInput ? (
@@ -280,7 +288,7 @@ export default function Explorer() {
         </>
       )}
 
-      {!hasRun && !isLoading && (
+      {!hasRun && (
         <div className="text-center py-16 text-slate-400 text-sm">
           Add filters above and click <span className="font-medium text-slate-500">Run Query</span> to generate a property report.
         </div>
