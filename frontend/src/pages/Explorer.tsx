@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import { api } from '../api'
 import type { FilterCondition, FilterRequest } from '../api'
@@ -6,11 +6,29 @@ import FilterBuilder from '../components/FilterBuilder'
 import PropertyReport from '../components/PropertyReport'
 import ProductTable from '../components/ProductTable'
 
+const STORAGE_KEY = 'salsify-explorer-filters'
+
+function loadSavedState(): { filters: FilterCondition[]; includeChildren: boolean } {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+    if (raw) return JSON.parse(raw)
+  } catch {}
+  return { filters: [], includeChildren: true }
+}
+
 export default function Explorer() {
-  const [filters, setFilters] = useState<FilterCondition[]>([])
-  const [includeChildren, setIncludeChildren] = useState(true)
+  const saved = loadSavedState()
+  const [filters, setFilters] = useState<FilterCondition[]>(saved.filters)
+  const [includeChildren, setIncludeChildren] = useState(saved.includeChildren)
   const [page, setPage] = useState(1)
   const [showProducts, setShowProducts] = useState(true)
+
+  // Persist filters to localStorage whenever they change
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ filters, includeChildren }))
+    } catch {}
+  }, [filters, includeChildren])
 
   const { data: attributes = [], isLoading: attrsLoading } = useQuery({
     queryKey: ['attributes'],
@@ -68,11 +86,19 @@ export default function Explorer() {
           onIncludeChildrenChange={v => { setIncludeChildren(v) }}
           onLoadPreset={preset => { setFilters(preset.filters) }}
         />
-        <div className="mt-4 flex justify-end">
+        <div className="mt-4 flex items-center justify-between">
+          {filters.length > 0 && (
+            <span className="text-xs text-slate-400">
+              Filters saved automatically
+              <svg className="inline w-3 h-3 ml-1 text-emerald-500" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+              </svg>
+            </span>
+          )}
           <button
             onClick={runQuery}
             disabled={isLoading || attributes.length === 0}
-            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="ml-auto flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isLoading ? (
               <>

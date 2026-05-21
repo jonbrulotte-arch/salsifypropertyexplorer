@@ -32,7 +32,7 @@ function CoverageBar({ pct }: { pct: number }) {
   )
 }
 
-function exportToExcel(rows: PropertyStat[], totalProducts: number) {
+function exportToExcel(rows: PropertyStat[], totalProducts: number, grouped: boolean) {
   const escape = (v: string | number) => {
     const s = String(v)
     return s.includes(',') || s.includes('"') || s.includes('\n')
@@ -40,18 +40,39 @@ function exportToExcel(rows: PropertyStat[], totalProducts: number) {
       : s
   }
 
-  const lines: string[] = [
+  const header = ['Property Name', 'Group', 'Data Type', 'Products with Value', 'Coverage %', 'Highlighted']
+    .map(escape).join(',')
+
+  const toRow = (p: PropertyStat) =>
+    [p.display_name, p.group, p.data_type, p.count, p.coverage_pct, p.highlighted ? 'Yes' : '']
+      .map(escape).join(',')
+
+  const dataLines: string[] = []
+
+  if (grouped) {
+    const groups = rows.reduce<Record<string, PropertyStat[]>>((acc, p) => {
+      if (!acc[p.group]) acc[p.group] = []
+      acc[p.group].push(p)
+      return acc
+    }, {})
+    for (const [group, props] of Object.entries(groups).sort(([a], [b]) => a.localeCompare(b))) {
+      dataLines.push(escape(group))   // group header row
+      dataLines.push(header)
+      props.forEach(p => dataLines.push(toRow(p)))
+      dataLines.push('')              // blank line between groups
+    }
+  } else {
+    dataLines.push(header)
+    rows.forEach(p => dataLines.push(toRow(p)))
+  }
+
+  const lines = [
     `Salsify Property Explorer — Property Report`,
     `Generated:,${new Date().toLocaleString()}`,
     `Filtered product set:,${totalProducts.toLocaleString()} products`,
     `Properties shown:,${rows.length}`,
     '',
-    ['Property Name', 'Group', 'Data Type', 'Products with Value', 'Coverage %', 'Highlighted']
-      .map(escape).join(','),
-    ...rows.map(p =>
-      [p.display_name, p.group, p.data_type, p.count, p.coverage_pct, p.highlighted ? 'Yes' : '']
-        .map(escape).join(',')
-    ),
+    ...dataLines,
   ]
 
   const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' })
@@ -172,7 +193,7 @@ export default function PropertyReport({ properties, totalProducts, defaultSort 
           {sorted.length} of {properties.length} properties
         </span>
         <button
-          onClick={() => exportToExcel(sorted, totalProducts)}
+          onClick={() => exportToExcel(sorted, totalProducts, groupByGroup)}
           className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-md transition-colors"
           title="Export current view to Excel"
         >
