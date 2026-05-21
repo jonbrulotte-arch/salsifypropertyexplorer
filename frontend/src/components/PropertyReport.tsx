@@ -7,6 +7,7 @@ interface Props {
   properties: PropertyStat[]
   totalProducts: number
   defaultSort: SortKey
+  onShowMissing?: (propertyName: string) => void
 }
 
 const DATA_TYPE_COLORS: Record<string, string> = {
@@ -84,7 +85,7 @@ function exportToExcel(rows: PropertyStat[], totalProducts: number, grouped: boo
   URL.revokeObjectURL(url)
 }
 
-export default function PropertyReport({ properties, totalProducts, defaultSort }: Props) {
+export default function PropertyReport({ properties, totalProducts, defaultSort, onShowMissing }: Props) {
   const [sort, setSort] = useState<SortKey>(defaultSort)
   const [groupByGroup, setGroupByGroup] = useState(false)
   const [minCoverage, setMinCoverage] = useState(0)
@@ -122,6 +123,7 @@ export default function PropertyReport({ properties, totalProducts, defaultSort 
               Coverage {sort === 'coverage_desc' ? '↓' : sort === 'coverage_asc' ? '↑' : ''}
             </th>
             <th className="pb-2 text-xs font-medium text-slate-500 text-right"># Products</th>
+            {onShowMissing && <th className="pb-2 text-xs font-medium text-slate-500" />}
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-50">
@@ -141,6 +143,19 @@ export default function PropertyReport({ properties, totalProducts, defaultSort 
                 <CoverageBar pct={prop.coverage_pct} />
               </td>
               <td className="py-2 text-right text-slate-600 tabular-nums">{prop.count.toLocaleString()}</td>
+              {onShowMissing && (
+                <td className="py-2 pl-3 text-right">
+                  {prop.coverage_pct < 100 && (
+                    <button
+                      onClick={() => onShowMissing(prop.property_name)}
+                      className="text-xs text-amber-600 hover:text-amber-800 hover:underline whitespace-nowrap transition-colors"
+                      title={`Filter Product List to SKUs missing "${prop.display_name}"`}
+                    >
+                      Show missing SKUs
+                    </button>
+                  )}
+                </td>
+              )}
             </tr>
           ))}
         </tbody>

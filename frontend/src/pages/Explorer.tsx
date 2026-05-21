@@ -24,6 +24,7 @@ export default function Explorer() {
   const [includeChildren, setIncludeChildren] = useState(saved.includeChildren)
   const [, setPage] = useState(1)
   const [showProducts, setShowProducts] = useState(true)
+  const productListRef = useRef<HTMLDivElement>(null)
   const [presetName, setPresetName] = useState('')
   const [showPresetInput, setShowPresetInput] = useState(false)
   const [presetSaved, setPresetSaved] = useState(false)
@@ -106,6 +107,16 @@ export default function Explorer() {
   function handlePageChange(newPage: number) {
     setPage(newPage)
     setQueryParams(q => q ? { ...q, page: newPage } : null)
+  }
+
+  function handleShowMissing(propertyName: string) {
+    const newFilters = [{ property: propertyName, operator: 'is_empty' }]
+    setFilters(newFilters)
+    const req: FilterRequest = { filters: newFilters, include_children: includeChildren, page: 1, page_size: 50 }
+    setPage(1)
+    setQueryParams(req)
+    setShowProducts(true)
+    setTimeout(() => productListRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 150)
   }
 
   function handleExportAll() {
@@ -245,12 +256,13 @@ export default function Explorer() {
                 properties={reportResult.properties}
                 totalProducts={reportResult.total_products}
                 defaultSort={adminSettings?.report_default_sort ?? 'coverage_desc'}
+                onShowMissing={handleShowMissing}
               />
             </div>
           )}
 
           {filterResult && (
-            <div className="bg-white rounded-xl border border-slate-200 shadow-sm">
+            <div ref={productListRef} className="bg-white rounded-xl border border-slate-200 shadow-sm">
               <button
                 onClick={() => setShowProducts(v => !v)}
                 className="w-full flex items-center justify-between px-5 py-4 text-left"
