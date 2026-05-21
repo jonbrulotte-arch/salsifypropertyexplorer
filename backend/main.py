@@ -113,12 +113,15 @@ def property_report(req: FilterRequest):
     attr_map = get_attribute_map()
     aliases = _settings.property_aliases
     highlighted = set(_settings.highlighted_properties)
+    hidden = set(_settings.hidden_properties)
     min_pct = _settings.report_min_coverage_pct
 
     counts: dict[str, int] = {}
     for product in matched:
         for key, val in product.items():
             if key.startswith("salsify:"):
+                continue
+            if key in hidden:
                 continue
             if val is None or val == "" or val == [] or val == {}:
                 continue
