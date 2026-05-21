@@ -29,6 +29,8 @@ export default function Admin() {
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   const [newAliasKey, setNewAliasKey] = useState('')
   const [newAliasVal, setNewAliasVal] = useState('')
+  const [renamingPreset, setRenamingPreset] = useState<string | null>(null)
+  const [renameValue, setRenameValue] = useState('')
 
   useEffect(() => {
     if (settings && !draft) setDraft(settings)
@@ -93,6 +95,17 @@ export default function Admin() {
 
   function removePreset(name: string) {
     setDraft(d => d ? { ...d, filter_presets: d.filter_presets.filter(p => p.name !== name) } : d)
+  }
+
+  function renamePreset(oldName: string, newName: string) {
+    const trimmed = newName.trim()
+    if (!trimmed || trimmed === oldName) { setRenamingPreset(null); return }
+    setDraft(d => d ? {
+      ...d,
+      filter_presets: d.filter_presets.map(p => p.name === oldName ? { ...p, name: trimmed } : p),
+    } : d)
+    setRenamingPreset(null)
+    setRenameValue('')
   }
 
   // Group attributes for the hidden/highlighted panels
@@ -326,21 +339,61 @@ export default function Admin() {
         </p>
         <div className="space-y-2">
           {draft.filter_presets.map(p => (
-            <div key={p.name} className="flex items-center justify-between bg-slate-50 rounded-lg px-3 py-2 text-sm">
-              <div>
-                <span className="font-medium text-slate-700">{p.name}</span>
-                <span className="ml-2 text-slate-400 text-xs">{p.filters.length} filter{p.filters.length !== 1 ? 's' : ''}</span>
-                {p.filters.length > 0 && (
-                  <ul className="mt-1 space-y-0.5">
-                    {p.filters.map((f, i) => (
-                      <li key={i} className="text-xs text-slate-400">
-                        {f.property} {f.operator} {f.value != null ? String(f.value) : ''}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-              <button onClick={() => removePreset(p.name)} className="ml-4 shrink-0 text-slate-400 hover:text-red-500 text-xs transition-colors">Remove</button>
+            <div key={p.name} className="bg-slate-50 rounded-lg px-3 py-2 text-sm">
+              {renamingPreset === p.name ? (
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={renameValue}
+                    onChange={e => setRenameValue(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') renamePreset(p.name, renameValue)
+                      if (e.key === 'Escape') { setRenamingPreset(null); setRenameValue('') }
+                    }}
+                    autoFocus
+                    className="flex-1 border border-slate-200 rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                  />
+                  <button
+                    onClick={() => renamePreset(p.name, renameValue)}
+                    disabled={!renameValue.trim()}
+                    className="px-2 py-1 text-xs bg-indigo-600 hover:bg-indigo-700 text-white rounded transition-colors disabled:opacity-50"
+                  >
+                    Save
+                  </button>
+                  <button
+                    onClick={() => { setRenamingPreset(null); setRenameValue('') }}
+                    className="text-slate-400 hover:text-slate-600 text-xs"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className="font-medium text-slate-700">{p.name}</span>
+                    <span className="ml-2 text-slate-400 text-xs">{p.filters.length} filter{p.filters.length !== 1 ? 's' : ''}</span>
+                    {p.filters.length > 0 && (
+                      <ul className="mt-1 space-y-0.5">
+                        {p.filters.map((f, i) => (
+                          <li key={i} className="text-xs text-slate-400">
+                            {f.property} {f.operator} {f.value != null ? String(f.value) : ''}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                  <div className="ml-4 shrink-0 flex items-center gap-2">
+                    <button
+                      onClick={() => { setRenamingPreset(p.name); setRenameValue(p.name) }}
+                      className="text-slate-400 hover:text-indigo-500 text-xs transition-colors"
+                      title="Rename preset"
+                    >
+                      Rename
+                    </button>
+                    <button onClick={() => removePreset(p.name)} className="text-slate-400 hover:text-red-500 text-xs transition-colors">Remove</button>
+                  </div>
+                </div>
+              )}
             </div>
           ))}
           {draft.filter_presets.length === 0 && (
