@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import * as XLSX from 'xlsx'
 import type { PropertyStat } from '../api'
 
 type SortKey = 'coverage_desc' | 'coverage_asc' | 'name_asc' | 'name_desc'
@@ -34,44 +33,34 @@ function CoverageBar({ pct }: { pct: number }) {
 }
 
 function exportToExcel(rows: PropertyStat[], totalProducts: number) {
-  const wb = XLSX.utils.book_new()
+  const escape = (v: string | number) => {
+    const s = String(v)
+    return s.includes(',') || s.includes('"') || s.includes('\n')
+      ? `"${s.replace(/"/g, '""')}"`
+      : s
+  }
 
-  // Summary info rows at the top
-  const summaryRows = [
-    ['Salsify Property Explorer — Property Report'],
-    [`Generated: ${new Date().toLocaleString()}`],
-    [`Filtered product set: ${totalProducts.toLocaleString()} products`],
-    [`Properties shown: ${rows.length}`],
-    [],
-    ['Property Name', 'Group', 'Data Type', 'Products with Value', 'Coverage %', 'Highlighted'],
+  const lines: string[] = [
+    `Salsify Property Explorer — Property Report`,
+    `Generated:,${new Date().toLocaleString()}`,
+    `Filtered product set:,${totalProducts.toLocaleString()} products`,
+    `Properties shown:,${rows.length}`,
+    '',
+    ['Property Name', 'Group', 'Data Type', 'Products with Value', 'Coverage %', 'Highlighted']
+      .map(escape).join(','),
+    ...rows.map(p =>
+      [p.display_name, p.group, p.data_type, p.count, p.coverage_pct, p.highlighted ? 'Yes' : '']
+        .map(escape).join(',')
+    ),
   ]
 
-  const dataRows = rows.map(p => [
-    p.display_name,
-    p.group,
-    p.data_type,
-    p.count,
-    p.coverage_pct,
-    p.highlighted ? 'Yes' : '',
-  ])
-
-  const wsData = [...summaryRows, ...dataRows]
-  const ws = XLSX.utils.aoa_to_sheet(wsData)
-
-  // Column widths
-  ws['!cols'] = [
-    { wch: 40 }, // Property Name
-    { wch: 28 }, // Group
-    { wch: 16 }, // Data Type
-    { wch: 22 }, // Products with Value
-    { wch: 14 }, // Coverage %
-    { wch: 12 }, // Highlighted
-  ]
-
-  XLSX.utils.book_append_sheet(wb, ws, 'Property Report')
-
-  const date = new Date().toISOString().slice(0, 10)
-  XLSX.writeFile(wb, `property-report-${date}.xlsx`)
+  const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `property-report-${new Date().toISOString().slice(0, 10)}.csv`
+  a.click()
+  URL.revokeObjectURL(url)
 }
 
 export default function PropertyReport({ properties, totalProducts, defaultSort }: Props) {
