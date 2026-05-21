@@ -1,4 +1,4 @@
-import type { ProductSummary } from '../api'
+import type { ProductRow } from '../api'
 
 const STATUS_COLORS: Record<string, string> = {
   Active: 'bg-green-100 text-green-700',
@@ -8,33 +8,88 @@ const STATUS_COLORS: Record<string, string> = {
   default: 'bg-slate-100 text-slate-600',
 }
 
+const STATUS_COL = 'Inventory Status'
+
+function exportProducts(columns: string[], products: ProductRow[], total: number) {
+  const escape = (v: string | null | undefined) => {
+    const s = v ?? ''
+    return s.includes(',') || s.includes('"') || s.includes('\n')
+      ? `"${s.replace(/"/g, '""')}"`
+      : s
+  }
+
+  const lines = [
+    `Salsify Property Explorer — Product List`,
+    `Generated:,${new Date().toLocaleString()}`,
+    `Total products:,${total.toLocaleString()}`,
+    '',
+    ['ID', ...columns].map(escape).join(','),
+    ...products.map(p =>
+      [p.id, ...columns.map(c => p.data[c] ?? '')].map(escape).join(',')
+    ),
+  ]
+
+  const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `product-list-${new Date().toISOString().slice(0, 10)}.csv`
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
 interface Props {
-  products: ProductSummary[]
+  products: ProductRow[]
+  columns: string[]
   total: number
   page: number
   pages: number
   pageSize: number
   onPageChange: (page: number) => void
+  onExportAll: () => void
+  exportLoading: boolean
 }
 
-export default function ProductTable({ products, total, page, pages, pageSize, onPageChange }: Props) {
+export default function ProductTable({
+  products, columns, total, page, pages, pageSize,
+  onPageChange, onExportAll, exportLoading,
+}: Props) {
   const start = (page - 1) * pageSize + 1
   const end = Math.min(page * pageSize, total)
 
   return (
     <div className="space-y-3">
-      <div className="text-xs text-slate-500">
-        Showing {start}–{end} of {total.toLocaleString()} products
+      <div className="flex items-center justify-between">
+        <span className="text-xs text-slate-500">
+          Showing {start}–{end} of {total.toLocaleString()} products
+        </span>
+        <button
+          onClick={onExportAll}
+          disabled={exportLoading}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-md transition-colors disabled:opacity-50"
+        >
+          {exportLoading ? (
+            <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+            </svg>
+          ) : (
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3M3 17V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
+            </svg>
+          )}
+          {exportLoading ? 'Exporting…' : `Export All ${total.toLocaleString()}`}
+        </button>
       </div>
+
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-slate-200 text-left">
-              <th className="pb-2 pr-4 text-xs font-medium text-slate-500">ID</th>
-              <th className="pb-2 pr-4 text-xs font-medium text-slate-500">Item Name</th>
-              <th className="pb-2 pr-4 text-xs font-medium text-slate-500">Brand</th>
-              <th className="pb-2 pr-4 text-xs font-medium text-slate-500">Category</th>
-              <th className="pb-2 text-xs font-medium text-slate-500">Status</th>
+              <th className="pb-2 pr-4 text-xs font-medium text-slate-500 whitespace-nowrap">ID</th>
+              {columns.map(col => (
+                <th key={col} className="pb-2 pr-4 text-xs font-medium text-slate-500 whitespace-nowrap">{col}</th>
+              ))}
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-50">
@@ -44,27 +99,29 @@ export default function ProductTable({ products, total, page, pages, pageSize, o
                   {p.is_child && <span className="text-slate-300 mr-1">└</span>}
                   {p.id}
                 </td>
-                <td className="py-2 pr-4 text-slate-800 max-w-xs">
-                  <span className="line-clamp-1">{p.item_name ?? '—'}</span>
-                </td>
-                <td className="py-2 pr-4 text-slate-600 whitespace-nowrap">{p.brand ?? '—'}</td>
-                <td className="py-2 pr-4 text-slate-500 text-xs max-w-[200px]">
-                  <span className="line-clamp-1">{p.jsp_category ?? '—'}</span>
-                </td>
-                <td className="py-2">
-                  {p.inventory_status ? (
-                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[p.inventory_status] ?? STATUS_COLORS.default}`}>
-                      {p.inventory_status}
-                    </span>
-                  ) : '—'}
-                </td>
+                {columns.map(col => {
+                  const val = p.data[col]
+                  if (col === STATUS_COL && val) {
+                    return (
+                      <td key={col} className="py-2 pr-4">
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[val] ?? STATUS_COLORS.default}`}>
+                          {val}
+                        </span>
+                      </td>
+                    )
+                  }
+                  return (
+                    <td key={col} className="py-2 pr-4 text-slate-700 max-w-xs">
+                      <span className="line-clamp-1">{val ?? '—'}</span>
+                    </td>
+                  )
+                })}
               </tr>
             ))}
           </tbody>
         </table>
       </div>
 
-      {/* Pagination */}
       {pages > 1 && (
         <div className="flex items-center justify-center gap-1">
           <button
@@ -106,3 +163,5 @@ export default function ProductTable({ products, total, page, pages, pageSize, o
     </div>
   )
 }
+
+export { exportProducts }

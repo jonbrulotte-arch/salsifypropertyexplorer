@@ -12,7 +12,7 @@ from .data_loader import load_data, get_attributes, get_attribute_map, get_enum_
 from .filter_engine import apply_filters
 from .models import (
     AdminSettings, AttributeInfo, FilterRequest, FilterResponse,
-    ProductSummary, PropertyStat, ReportResponse,
+    ProductRow, PropertyStat, ReportResponse, DEFAULT_PRODUCT_COLUMNS,
 )
 
 SETTINGS_FILE = Path(__file__).parent / "admin_settings.json"
@@ -76,25 +76,35 @@ def list_attributes(include_hidden: bool = False):
 def filter_products(req: FilterRequest):
     matched = apply_filters(req.filters, req.include_children)
     total = len(matched)
-    pages = max(1, math.ceil(total / req.page_size))
-    page = max(1, min(req.page, pages))
-    start = (page - 1) * req.page_size
-    page_products = matched[start: start + req.page_size]
+    columns = _settings.product_list_columns or DEFAULT_PRODUCT_COLUMNS
+    aliases = _settings.property_aliases
 
-    def summarize(p: dict) -> ProductSummary:
-        name = get_product_value(p, "Item Name")
-        if isinstance(name, list):
-            name = name[0] if name else None
-        brand = get_product_value(p, "Brand")
-        cat = get_product_value(p, "JSP Category")
-        status = get_product_value(p, "Inventory Status")
-        return ProductSummary(
+    # page_size=-1 means return all (used by export)
+    if req.page_size == -1:
+        pages, page, page_products = 1, 1, matched
+    else:
+        pages = max(1, math.ceil(total / req.page_size))
+        page = max(1, min(req.page, pages))
+        start = (page - 1) * req.page_size
+        page_products = matched[start: start + req.page_size]
+
+    # Build display_col -> raw_col mapping once; use display name as the key throughout
+    col_pairs = [(aliases.get(col, col), col) for col in columns]
+
+    def to_row(p: dict) -> ProductRow:
+        data: dict[str, str | None] = {}
+        for display_col, raw_col in col_pairs:
+            val = get_product_value(p, raw_col)
+            if val is None:
+                data[display_col] = None
+            elif isinstance(val, list):
+                data[display_col] = ", ".join(str(v) for v in val if v is not None)
+            else:
+                data[display_col] = str(val)
+        return ProductRow(
             id=p.get("salsify:id", ""),
-            item_name=str(name) if name is not None else None,
-            brand=str(brand) if brand is not None else None,
-            jsp_category=str(cat) if cat is not None else None,
-            inventory_status=str(status) if status is not None else None,
             is_child="salsify:parent_id" in p and p["salsify:parent_id"] is not None,
+            data=data,
         )
 
     return FilterResponse(
@@ -102,7 +112,8 @@ def filter_products(req: FilterRequest):
         page=page,
         page_size=req.page_size,
         pages=pages,
-        products=[summarize(p) for p in page_products],
+        columns=[display_col for display_col, _ in col_pairs],
+        products=[to_row(p) for p in page_products],
     )
 
 

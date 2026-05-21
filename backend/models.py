@@ -20,13 +20,10 @@ class FilterRequest(BaseModel):
     page_size: int = 50
 
 
-class ProductSummary(BaseModel):
+class ProductRow(BaseModel):
     id: str
-    item_name: Optional[str]
-    brand: Optional[str]
-    jsp_category: Optional[str]
-    inventory_status: Optional[str]
     is_child: bool
+    data: dict[str, Optional[str]]
 
 
 class FilterResponse(BaseModel):
@@ -34,7 +31,8 @@ class FilterResponse(BaseModel):
     page: int
     page_size: int
     pages: int
-    products: list[ProductSummary]
+    columns: list[str]
+    products: list[ProductRow]
 
 
 class PropertyStat(BaseModel):
@@ -57,6 +55,9 @@ class FilterPreset(BaseModel):
     filters: list[FilterCondition]
 
 
+DEFAULT_PRODUCT_COLUMNS = ["Item Name", "Brand", "JSP Category", "Inventory Status"]
+
+
 class AdminSettings(BaseModel):
     hidden_properties: list[str] = []
     property_aliases: dict[str, str] = {}
@@ -65,6 +66,7 @@ class AdminSettings(BaseModel):
     filter_presets: list[FilterPreset] = []
     exclude_children_by_default: bool = False
     highlighted_properties: list[str] = []
+    product_list_columns: list[str] = DEFAULT_PRODUCT_COLUMNS
 
 
 class AttributeInfo(BaseModel):

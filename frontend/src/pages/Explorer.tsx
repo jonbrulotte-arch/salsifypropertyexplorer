@@ -4,7 +4,7 @@ import { api } from '../api'
 import type { FilterCondition, FilterRequest } from '../api'
 import FilterBuilder from '../components/FilterBuilder'
 import PropertyReport from '../components/PropertyReport'
-import ProductTable from '../components/ProductTable'
+import ProductTable, { exportProducts } from '../components/ProductTable'
 
 const STORAGE_KEY = 'salsify-explorer-filters'
 
@@ -59,6 +59,11 @@ export default function Explorer() {
     mutationFn: (req: FilterRequest) => api.getReport(req),
   })
 
+  const exportMutation = useMutation({
+    mutationFn: (req: FilterRequest) => api.filterProducts(req),
+    onSuccess: (data) => exportProducts(data.columns, data.products, data.total),
+  })
+
   const savePresetMutation = useMutation({
     mutationFn: api.saveAdminSettings,
     onSuccess: () => {
@@ -91,6 +96,10 @@ export default function Explorer() {
   function handlePageChange(newPage: number) {
     setPage(newPage)
     filterMutation.mutate({ filters, include_children: includeChildren, page: newPage, page_size: 50 })
+  }
+
+  function handleExportAll() {
+    exportMutation.mutate({ filters, include_children: includeChildren, page: 1, page_size: -1 })
   }
 
   function savePreset() {
@@ -255,11 +264,14 @@ export default function Explorer() {
                 <div className="px-5 pb-5">
                   <ProductTable
                     products={filterResult.products}
+                    columns={filterResult.columns}
                     total={filterResult.total}
                     page={filterResult.page}
                     pages={filterResult.pages}
                     pageSize={filterResult.page_size}
                     onPageChange={handlePageChange}
+                    onExportAll={handleExportAll}
+                    exportLoading={exportMutation.isPending}
                   />
                 </div>
               )}

@@ -160,6 +160,83 @@ export default function Admin() {
         </div>
       </Section>
 
+      {/* Product List Customizer */}
+      <Section title="Product List Columns">
+        <p className="text-xs text-slate-500 mb-4">Choose which columns appear in the Product List and their order. The ID column is always shown first.</p>
+        <div className="space-y-2 mb-4">
+          {(draft.product_list_columns ?? []).map((col, i) => (
+            <div key={col} className="flex items-center gap-2 bg-slate-50 rounded-lg px-3 py-2">
+              <span className="flex-1 text-sm text-slate-700">{col}</span>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setDraft(d => {
+                    if (!d) return d
+                    const cols = [...d.product_list_columns]
+                    if (i === 0) return d
+                    ;[cols[i - 1], cols[i]] = [cols[i], cols[i - 1]]
+                    return { ...d, product_list_columns: cols }
+                  })}
+                  disabled={i === 0}
+                  className="p-1 text-slate-400 hover:text-slate-600 disabled:opacity-20 disabled:cursor-not-allowed"
+                  title="Move up"
+                >
+                  ↑
+                </button>
+                <button
+                  onClick={() => setDraft(d => {
+                    if (!d) return d
+                    const cols = [...d.product_list_columns]
+                    if (i === cols.length - 1) return d
+                    ;[cols[i], cols[i + 1]] = [cols[i + 1], cols[i]]
+                    return { ...d, product_list_columns: cols }
+                  })}
+                  disabled={i === (draft.product_list_columns ?? []).length - 1}
+                  className="p-1 text-slate-400 hover:text-slate-600 disabled:opacity-20 disabled:cursor-not-allowed"
+                  title="Move down"
+                >
+                  ↓
+                </button>
+                <button
+                  onClick={() => setDraft(d => d ? { ...d, product_list_columns: d.product_list_columns.filter((_, j) => j !== i) } : d)}
+                  className="p-1 text-slate-400 hover:text-red-500 transition-colors"
+                  title="Remove column"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+          ))}
+          {(draft.product_list_columns ?? []).length === 0 && (
+            <p className="text-xs text-slate-400">No columns selected — add one below.</p>
+          )}
+        </div>
+        <div className="flex gap-2">
+          <select
+            id="new-col-select"
+            defaultValue=""
+            className="flex-1 border border-slate-200 rounded px-2 py-1.5 text-sm text-slate-700"
+          >
+            <option value="">Add a column…</option>
+            {attributes
+              .filter((a: { id: string }) => !(draft.product_list_columns ?? []).includes(a.id))
+              .map((a: { id: string; display_name: string }) => (
+                <option key={a.id} value={a.id}>{a.display_name}</option>
+              ))}
+          </select>
+          <button
+            onClick={() => {
+              const sel = document.getElementById('new-col-select') as HTMLSelectElement
+              if (!sel.value) return
+              setDraft(d => d ? { ...d, product_list_columns: [...(d.product_list_columns ?? []), sel.value] } : d)
+              sel.value = ''
+            }}
+            className="px-3 py-1.5 text-sm bg-slate-100 hover:bg-slate-200 text-slate-700 rounded transition-colors"
+          >
+            Add
+          </button>
+        </div>
+      </Section>
+
       {/* Property Visibility */}
       <Section title="Property Visibility">
         <p className="text-xs text-slate-500 mb-4">Hidden properties won't appear in the filter builder. Highlighted properties are starred in reports.</p>

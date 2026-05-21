@@ -21,13 +21,10 @@ export interface FilterRequest {
   page_size: number
 }
 
-export interface ProductSummary {
+export interface ProductRow {
   id: string
-  item_name: string | null
-  brand: string | null
-  jsp_category: string | null
-  inventory_status: string | null
   is_child: boolean
+  data: Record<string, string | null>
 }
 
 export interface FilterResponse {
@@ -35,7 +32,8 @@ export interface FilterResponse {
   page: number
   page_size: number
   pages: number
-  products: ProductSummary[]
+  columns: string[]
+  products: ProductRow[]
 }
 
 export interface PropertyStat {
@@ -66,6 +64,7 @@ export interface AdminSettings {
   filter_presets: FilterPreset[]
   exclude_children_by_default: boolean
   highlighted_properties: string[]
+  product_list_columns: string[]
 }
 
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
