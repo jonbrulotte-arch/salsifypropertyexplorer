@@ -110,7 +110,7 @@ export default function Explorer() {
   }
 
   function handleShowMissing(propertyName: string) {
-    const newFilters = [{ property: propertyName, operator: 'is_empty' }]
+    const newFilters = [...filters, { property: propertyName, operator: 'is_empty' }]
     setFilters(newFilters)
     const req: FilterRequest = { filters: newFilters, include_children: includeChildren, page: 1, page_size: 50 }
     setPage(1)
