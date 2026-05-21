@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import * as XLSX from 'xlsx'
 import type { PropertyStat } from '../api'
 
 type SortKey = 'coverage_desc' | 'coverage_asc' | 'name_asc' | 'name_desc'
@@ -14,7 +15,7 @@ const DATA_TYPE_COLORS: Record<string, string> = {
   number: 'bg-green-50 text-green-700',
   boolean: 'bg-purple-50 text-purple-700',
   enumerated: 'bg-orange-50 text-orange-700',
-  'digital_asset': 'bg-slate-100 text-slate-600',
+  digital_asset: 'bg-slate-100 text-slate-600',
   default: 'bg-slate-100 text-slate-600',
 }
 
@@ -32,7 +33,48 @@ function CoverageBar({ pct }: { pct: number }) {
   )
 }
 
-export default function PropertyReport({ properties, defaultSort }: Props) {
+function exportToExcel(rows: PropertyStat[], totalProducts: number) {
+  const wb = XLSX.utils.book_new()
+
+  // Summary info rows at the top
+  const summaryRows = [
+    ['Salsify Property Explorer — Property Report'],
+    [`Generated: ${new Date().toLocaleString()}`],
+    [`Filtered product set: ${totalProducts.toLocaleString()} products`],
+    [`Properties shown: ${rows.length}`],
+    [],
+    ['Property Name', 'Group', 'Data Type', 'Products with Value', 'Coverage %', 'Highlighted'],
+  ]
+
+  const dataRows = rows.map(p => [
+    p.display_name,
+    p.group,
+    p.data_type,
+    p.count,
+    p.coverage_pct,
+    p.highlighted ? 'Yes' : '',
+  ])
+
+  const wsData = [...summaryRows, ...dataRows]
+  const ws = XLSX.utils.aoa_to_sheet(wsData)
+
+  // Column widths
+  ws['!cols'] = [
+    { wch: 40 }, // Property Name
+    { wch: 28 }, // Group
+    { wch: 16 }, // Data Type
+    { wch: 22 }, // Products with Value
+    { wch: 14 }, // Coverage %
+    { wch: 12 }, // Highlighted
+  ]
+
+  XLSX.utils.book_append_sheet(wb, ws, 'Property Report')
+
+  const date = new Date().toISOString().slice(0, 10)
+  XLSX.writeFile(wb, `property-report-${date}.xlsx`)
+}
+
+export default function PropertyReport({ properties, totalProducts, defaultSort }: Props) {
   const [sort, setSort] = useState<SortKey>(defaultSort)
   const [groupByGroup, setGroupByGroup] = useState(false)
   const [minCoverage, setMinCoverage] = useState(0)
@@ -128,7 +170,7 @@ export default function PropertyReport({ properties, defaultSort }: Props) {
           />
           <span className="text-xs tabular-nums w-8">{minCoverage}%</span>
         </label>
-        <label className="flex items-center gap-2 text-sm text-slate-600 cursor-pointer ml-auto">
+        <label className="flex items-center gap-2 text-sm text-slate-600 cursor-pointer">
           <input
             type="checkbox"
             checked={groupByGroup}
@@ -137,9 +179,19 @@ export default function PropertyReport({ properties, defaultSort }: Props) {
           />
           Group by category
         </label>
-        <span className="text-xs text-slate-400">
+        <span className="text-xs text-slate-400 ml-auto">
           {sorted.length} of {properties.length} properties
         </span>
+        <button
+          onClick={() => exportToExcel(sorted, totalProducts)}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-md transition-colors"
+          title="Export current view to Excel"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3M3 17V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
+          </svg>
+          Export to Excel
+        </button>
       </div>
 
       {/* Table */}
